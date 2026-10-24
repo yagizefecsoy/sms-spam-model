@@ -1,83 +1,128 @@
 # SMS Spam Detection
 
-İngilizce SMS mesajlarını **spam** veya **normal (ham)** olarak sınıflandıran, Python ile geliştirilmiş bir makine öğrenmesi projesi.
+İngilizce SMS mesajlarını **spam** veya **normal (ham)** olarak sınıflandıran bir denetimli (supervised) makine öğrenmesi projesi.
 
-## Yöntem
+**Sonuç:** Seçilen model (TF-IDF + Linear SVM), eğitimde hiç görmediği 1.035 test mesajında spam mesajların **%90,1'ini** yakaladı. Spam dediği mesajların **%95,2'si** gerçekten spamdi (spam F1 = **0,925**).
 
-- Pandas ile veri okuma ve eksik değer kontrolü
-- Birebir tekrar eden kayıtların kaldırılması
-- Sınıf oranlarını koruyan %80 eğitim / %20 test ayrımı (`random_state=42`)
-- TF-IDF ile metinlerin sayısal özelliklere dönüştürülmesi
-- Multinomial Naive Bayes ile başlangıç modeli
-- Pipeline ve 5 katlı StratifiedKFold ile alpha karşılaştırması
-- Eğitim verisindeki ortalama spam F1 puanına göre model seçimi
-- Test değerlendirmesi ve terminalden etkileşimli mesaj sınıflandırma
+---
 
-TF-IDF her çapraz doğrulama turunda yalnızca ilgili eğitim parçasında öğrenilir. Alpha seçenekleri: 0.1, 0.3, 0.5, 1.0.
+## 1. Problem
 
-## Kurulum ve çalıştırma
+- **Görev:** İkili metin sınıflandırma. Girdi bir SMS metni, çıktı `spam` veya `ham`.
+- **Zorluk:** Veri dengesiz; mesajların yalnızca %12,6'sı spam. Her mesaja "normal" diyen bir model bile %87 doğruluk alır. Bu yüzden başarı ölçütü olarak doğruluk (accuracy) değil, **spam sınıfının F1 puanı** kullanıldı. F1, kaçırılan spam (recall) ile yanlış alarm (precision) arasındaki dengeyi ölçer.
 
-Python 3.11 veya üzeri kullanın. Proje klasöründe bir sanal ortam oluşturun:
+## 2. Veri seti
+
+[UCI SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection). Kaynak: Almeida, T. & Hidalgo, J. (2011), DOI: [10.24432/C5CC84](https://doi.org/10.24432/C5CC84). Lisans: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+| | Kayıt |
+|---|---:|
+| Ham veri | 5.574 |
+| Birebir tekrar (silindi) | 403 |
+| **Temiz veri** | **5.171** (4.518 normal, 653 spam) |
+| Eğitim (%80, sınıf oranı korunarak) | 4.136 |
+| Test (%20) | 1.035 |
+
+Tekrarlar eğitim/test ayrımından **önce** silindi. Silinmeseydi aynı mesaj hem eğitimde hem testte bulunabilir ve test sonucu olduğundan iyi görünürdü.
+
+## 3. Yöntem
+
+```
+Ham metin ──► TF-IDF (kelime ağırlıkları) ──► Sınıflandırıcı ──► spam / ham
+              └──────────── tek bir sklearn Pipeline ─────────────┘
+```
+
+1. **Özellikler:** TF-IDF. Bir kelime bir mesajda sık, tüm mesajlarda ise nadir geçiyorsa daha yüksek ağırlık alır. Tek kelimeler ve kelime ikilileri (bigram) denendi.
+2. **Aday modeller:** Multinomial Naive Bayes, Logistic Regression ve Linear SVM.
+3. **Ayar seçimi:** Her model için `GridSearchCV` ile **yalnızca eğitim verisinde** 5 katlı tabakalı çapraz doğrulama yapıldı. TF-IDF pipeline'ın içinde olduğu için her katta sadece o katın eğitim parçasında öğrenilir. Böylece doğrulama parçasından bilgi sızmaz.
+4. **Model seçimi:** Ortalama CV spam F1 puanı en yüksek olan model seçildi.
+5. **Test:** Test verisi seçim bittikten sonra **yalnızca bir kez** kullanıldı.
+
+## 4. Sonuçlar
+
+### Model karşılaştırması (5 katlı CV, eğitim verisi)
+
+| Model | En iyi ayarlar | CV spam F1 |
+|---|---|---:|
+| Naive Bayes | alpha=0.01, kelime + bigram | 0,944 ± 0,019 |
+| Logistic Regression | C=100, class_weight=balanced | 0,951 ± 0,013 |
+| **Linear SVM** ✅ | C=1, class_weight=balanced | **0,952 ± 0,014** |
+
+![Model karşılaştırması](reports/figures/model_karsilastirma.png)
+
+### Test sonuçları (1.035 mesaj)
+
+| Ölçüt | Başlangıç modeli (NB, alpha=1.0) | Seçilen model (Linear SVM) |
+|---|---:|---:|
+| Doğruluk | %95,27 | %98,16 |
+| Spam precision | %100,00 | %95,16 |
+| Spam recall | %62,60 | **%90,08** |
+| **Spam F1** | 0,770 | **0,925** |
+| Yakalanan / kaçırılan spam | 82 / 49 | **118 / 13** |
+| Normal mesajda yanlış alarm | 0 | 6 |
+
+![Hata matrisi](reports/figures/hata_matrisi.png)
+
+Tüm sayılar `reports/metrics.json` dosyasında.
+
+### Yorum
+
+- **Başlangıç modeli** hiç yanlış alarm vermiyor ama spamlerin üçte birinden fazlasını kaçırıyor. Bunun sebebi varsayılan `alpha=1.0` değerinin nadir spam kelimelerinin etkisini fazla bastırması.
+- **Seçilen model** kaçırılan spam sayısını 49'dan 13'e indirdi. Bunun bedeli, 904 normal mesajdan 6'sında yanlış alarm.
+- Üç modelin CV puanları birbirine çok yakın ve farklar standart sapmanın içinde kalıyor. Yani "Linear SVM açıkça en iyisi" denemez; üçü de bu veri için uygun. Seçim, önceden belirlenmiş kurala (en yüksek ortalama CV F1) göre yapıldı.
+
+## 5. Geliştirme sürecinde düzeltilenler
+
+Proje ilk olarak tek bir `main.py` betiğiydi. Teslim için şunlar değiştirildi:
+
+| Önceki durum | Sorun | Düzeltme |
+|---|---|---|
+| Yalnızca Naive Bayes | Başka model ailesiyle karşılaştırma yoktu | Logistic Regression ve Linear SVM eklendi |
+| Alpha denemesi 0.1–1.0, en iyisi 0.1 | En iyi değer aralığın ucundaydı, daha küçük değerler hiç denenmemişti | Aralık 0.001–1.0'a genişletildi. Yeni en iyi değer (0.01) aralığın içinde |
+| Model diske kaydedilmiyordu | Her tahmin için yeniden eğitim gerekiyordu | `models/spam_model.joblib` olarak kaydediliyor |
+| Eğitim ve etkileşimli tahmin aynı dosyadaydı | Tahmin yapmak için eğitimi beklemek gerekiyordu | `egit.py` ve `tahmin.py` ayrıldı |
+| Sonuçlar yalnızca terminale yazılıyordu | Raporlanabilir ve tekrar üretilebilir değildi | `metrics.json` ve grafikler otomatik üretiliyor |
+
+## 6. Kurulum ve çalıştırma
+
+Python 3.11 veya üzeri gerekir.
 
 ```bash
 python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Bağımlılıkları kurun:
-
-```bash
+.\.venv\Scripts\Activate.ps1        # Windows PowerShell
+# source .venv/bin/activate         # macOS / Linux
 python -m pip install -r requirements.txt
 ```
 
-[UCI SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection) sayfasından veri setini indirin. ZIP içindeki `SMSSpamCollection` dosyasını, adını değiştirmeden `main.py` ile aynı klasöre koyun. Veri dosyası depoya dahil edilmemiştir.
+UCI sayfasından ZIP'i indirin ve içindeki `SMSSpamCollection` dosyasını adını değiştirmeden `data/` klasörüne koyun.
 
 ```bash
-python main.py
+python src/egit.py                                      # eğit, değerlendir, kaydet (~1 dk)
+python src/tahmin.py "WINNER! Claim your free prize"    # tek mesaj sınıflandır
+python src/tahmin.py                                    # etkileşimli mod (çıkmak için q)
 ```
 
-Program önce modelleri eğitir ve sonuçları yazdırır, ardından İngilizce mesaj girmenizi bekler. Çıkmak için `q` yazın. Her çalıştırmada eğitim tekrar yapılır; eğitilmiş model diske kaydedilmez.
+Tüm rastgelelikler `random_state=42` ile sabitlendi; aynı ortamda aynı sonuçlar üretilir.
 
-## Veri seti
+## 7. Proje yapısı
 
-Kullanılan dosyada 5.574 kayıt vardır. 403 birebir tekrar kaldırıldıktan sonra 5.171 kayıt kalır: 4.518 normal ve 653 spam. Eğitimde 4.136, testte 1.035 mesaj kullanılır.
+```
+sms-spam-model/
+├── data/                  # SMSSpamCollection (depoda yok, indirilmeli)
+├── src/
+│   ├── veri.py            # okuma, temizleme, eğitim/test ayrımı
+│   ├── egit.py            # model karşılaştırma, test, kaydetme, grafikler
+│   └── tahmin.py          # kaydedilmiş modelle tahmin
+├── models/spam_model.joblib
+├── reports/
+│   ├── metrics.json
+│   └── figures/           # model_karsilastirma.png, hata_matrisi.png
+└── requirements.txt
+```
 
-Kaynak: Almeida, T. & Hidalgo, J. (2011). *SMS Spam Collection*. UCI Machine Learning Repository. DOI: https://doi.org/10.24432/C5CC84.
+## 8. Sınırlar
 
-Veri seti lisansı: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Bu lisans bilgisi veri setine aittir.
-
-## Test sonuçları
-
-Aşağıdaki sonuçlar geliştirme sırasında alınan test çıktılarıdır. Seçilen alpha: **0.1**. Çapraz doğrulama ortalama spam F1: **0.925**.
-
-| Ölçüt | Başlangıç (alpha=1.0) | Seçilen model (alpha=0.1) |
-|---|---:|---:|
-| Genel doğruluk | %95.27 | %98.16 |
-| Spam precision | %100.00 | %96.67 |
-| Spam recall | %62.60 | %88.55 |
-| Spam F1 | 0.770 | 0.924 |
-| Yakalanan spam | 82 | 116 |
-| Kaçırılan spam | 49 | 15 |
-| Normal mesajda yanlış alarm | 0 | 4 |
-
-Seçilen modelin hata matrisi:
-
-| Gerçek sınıf | Tahmin normal | Tahmin spam |
-|---|---:|---:|
-| Normal | 900 | 4 |
-| Spam | 15 | 116 |
-
-## Sınırlar
-
-Bu bir öğrenme projesidir. Sonuçlar bu veri seti ve bölünmesi için geçerlidir; güncel veya farklı kaynaklardan gelen mesajlarda aynı başarı garanti edilmez. İngilizce verilerle eğitilmiştir; Türkçe için değerlendirilmemiştir. Yakın benzer mesajlar birebir tekrar temizliğinden sonra kalabilir. Başlangıç ve seçilen model aynı test grubunda raporlanmıştır; alpha seçimi eğitim içindeki çapraz doğrulamayla yapılmıştır. Üretim kullanımı öncesinde yeni ve bağımsız verilerle değerlendirilmelidir.
+- Sonuçlar bu veri setine ve bu bölünmeye aittir. Veri 2011 öncesine ait İngilizce mesajlardan oluşuyor; güncel spam türlerinde ve Türkçe mesajlarda başarı ölçülmedi.
+- Yalnızca birebir tekrarlar silindi. Çok benzer mesajlar (ör. sadece numarası farklı spam kampanyaları) hem eğitimde hem testte bulunabilir, bu da test sonucunu biraz iyimser gösterebilir.
+- Test seti 131 spam içeriyor. Tek bir mesajın sınıfı değişse recall yaklaşık 0,8 puan oynar, bu yüzden küçük farklar anlamlı değildir.
+- Gerçek kullanımdan önce yeni ve bağımsız verilerle değerlendirme gerekir.

@@ -1,0 +1,78 @@
+{
+  "veri": {
+    "ham_kayit": 5574,
+    "eksik_deger": 0,
+    "tekrar_eden": 403,
+    "temiz_kayit": 5171,
+    "etiket_dagilimi": {
+      "ham": 4518,
+      "spam": 653
+    },
+    "egitim": 4136,
+    "test": 1035
+  },
+  "cv_karsilastirma": {
+    "Naive Bayes": {
+      "cv_f1_ort": 0.9435613849460243,
+      "cv_f1_std": 0.019023974282883035,
+      "en_iyi_ayarlar": {
+        "model__alpha": 0.01,
+        "tfidf__ngram_range": [
+          1,
+          2
+        ]
+      }
+    },
+    "Logistic Regression": {
+      "cv_f1_ort": 0.951206869855896,
+      "cv_f1_std": 0.01291728864617494,
+      "en_iyi_ayarlar": {
+        "model__C": 100,
+        "model__class_weight": "balanced",
+        "tfidf__ngram_range": [
+          1,
+          1
+        ]
+      }
+    },
+    "Linear SVM": {
+      "cv_f1_ort": 0.952184463104372,
+      "cv_f1_std": 0.013858629606809399,
+      "en_iyi_ayarlar": {
+        "model__C": 1,
+        "model__class_weight": "balanced",
+        "tfidf__ngram_range": [
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "secilen_model": "Linear SVM",
+  "test": {
+    "baslangic_nb_alpha_1": {
+      "dogruluk": 0.9526570048309179,
+      "spam_precision": 1.0,
+      "spam_recall": 0.6259541984732825,
+      "spam_f1": 0.7699530516431925,
+      "hata_matrisi": {
+        "dogru_normal": 904,
+        "yanlis_alarm": 0,
+        "kacirilan_spam": 49,
+        "yakalanan_spam": 82
+      }
+    },
+    "secilen_model": {
+      "dogruluk": 0.9816425120772947,
+      "spam_precision": 0.9516129032258065,
+      "spam_recall": 0.9007633587786259,
+      "spam_f1": 0.9254901960784314,
+      "hata_matrisi": {
+        "dogru_normal": 898,
+        "yanlis_alarm": 6,
+        "kacirilan_spam": 13,
+        "yakalanan_spam": 118
+      }
+    }
+  }
+}
