@@ -92,6 +92,13 @@ Proje ilk olarak tek bir `main.py` betiğiydi. Teslim için şunlar değiştiril
 | Eğitim ve etkileşimli tahmin aynı dosyadaydı | Tahmin yapmak için eğitimi beklemek gerekiyordu | `egit.py` ve `tahmin.py` ayrıldı |
 | Sonuçlar yalnızca terminale yazılıyordu | Raporlanabilir ve tekrar üretilebilir değildi | `metrics.json` ve grafikler otomatik üretiliyor |
 
+## Teslim dosyaları (Assignment 1)
+
+| Dosya | İçerik |
+|---|---|
+| [docs/1_SMS_Spam_Linear_SVM.pptx](docs/1_SMS_Spam_Linear_SVM.pptx) | Sunum: Linear SVM'in fikri, matematiği, eğitimi ve projenin geliştirme süreci |
+| [docs/Proje_Raporu.pdf](docs/Proje_Raporu.pdf) | Süreci anlatan proje raporu (SMS Spam + Futbol projeleri) |
+
 ## 6. Kurulum ve çalıştırma
 
 Python 3.11 veya üzeri gerekir.
