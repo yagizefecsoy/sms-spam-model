@@ -15,13 +15,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score, classification_report,
                              confusion_matrix, f1_score, make_scorer, precision_score,
-                             recall_score)
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+                             recall_score, roc_auc_score, roc_curve)
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, learning_curve
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
@@ -62,6 +63,13 @@ ADAYLAR = {
 
 def pipeline_kur(siniflandirici):
     return Pipeline([("tfidf", TfidfVectorizer(sublinear_tf=True)), ("model", siniflandirici)])
+
+
+def spam_skoru(model, X):
+    """ROC için sürekli bir 'spam olma' puanı: SVM/LogReg'de karar fonksiyonu, NB'de olasılık."""
+    if hasattr(model, "decision_function"):
+        return model.decision_function(X)
+    return model.predict_proba(X)[:, list(model.classes_).index("spam")]
 
 
 def test_olcutleri(y_gercek, y_tahmin):
@@ -128,6 +136,46 @@ def main():
     MODEL_DOSYASI.parent.mkdir(parents=True, exist_ok=True)
     GRAFIK_KLASORU.mkdir(parents=True, exist_ok=True)
     joblib.dump(secilen_model, MODEL_DOSYASI)
+
+    # Grafik 3: ROC eğrileri (test verisi). Eşik değiştikçe yakalanan spam oranı (TPR) ile
+    # yanlış alarm oranı (FPR) arasındaki denge; AUC = eğrinin altındaki alan (1 = kusursuz).
+    y_test_ikili = (y_test == "spam").astype(int)
+    modeller = {"Başlangıç NB (alpha=1)": baslangic} | {ad: s["arama"].best_estimator_ for ad, s in sonuclar.items()}
+    fig, ax = plt.subplots(figsize=(5, 4.5))
+    metrikler["test_roc_auc"] = {}
+    for ad, model in modeller.items():
+        skor = spam_skoru(model, X_test)
+        fpr, tpr, _ = roc_curve(y_test_ikili, skor)
+        auc = roc_auc_score(y_test_ikili, skor)
+        metrikler["test_roc_auc"][ad] = auc
+        ax.plot(fpr, tpr, lw=2.5 if ad == secilen_ad else 1.2, label=f"{ad} (AUC={auc:.3f})")
+    ax.plot([0, 1], [0, 1], color="gray", ls=":", lw=1)
+    ax.set(xlabel="Yanlış alarm oranı (FPR)", ylabel="Yakalanan spam oranı (TPR)", title="ROC eğrileri (test verisi)")
+    ax.legend(loc="lower right", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(GRAFIK_KLASORU / "roc_egrisi.png", dpi=150)
+    plt.close(fig)
+
+    # Grafik 4: öğrenme eğrisi. Eğitim verisi büyüdükçe eğitim ve doğrulama F1'i nasıl değişiyor?
+    # İki eğri birbirine yaklaşıyorsa model ezberlemiyor; doğrulama eğrisi hâlâ yükseliyorsa
+    # daha fazla veri işe yarar.
+    boyutlar, egitim_puan, dogrulama_puan = learning_curve(
+        secilen_model, X_egitim, y_egitim, cv=cv, scoring=SPAM_F1,
+        train_sizes=np.linspace(0.1, 1.0, 6), n_jobs=-1)
+    fig, ax = plt.subplots(figsize=(5.5, 4))
+    for puan, etiket, renk in [(egitim_puan, "Eğitim", "#4C78A8"), (dogrulama_puan, "Doğrulama (CV)", "#E45756")]:
+        ax.plot(boyutlar, puan.mean(axis=1), "o-", color=renk, label=etiket)
+        ax.fill_between(boyutlar, puan.mean(axis=1) - puan.std(axis=1), puan.mean(axis=1) + puan.std(axis=1),
+                        color=renk, alpha=0.15)
+    ax.set(xlabel="Eğitim mesajı sayısı", ylabel="Spam F1", title=f"Öğrenme eğrisi: {secilen_ad}", ylim=(0.5, 1.02))
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(GRAFIK_KLASORU / "ogrenme_egrisi.png", dpi=150)
+    plt.close(fig)
+    metrikler["ogrenme_egrisi"] = {"egitim_boyutu": boyutlar.tolist(),
+                                   "egitim_f1": egitim_puan.mean(axis=1).tolist(),
+                                   "dogrulama_f1": dogrulama_puan.mean(axis=1).tolist()}
+
     (RAPOR_KLASORU / "metrics.json").write_text(
         json.dumps(metrikler, indent=2, ensure_ascii=False), encoding="utf-8")
 

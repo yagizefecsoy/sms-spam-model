@@ -63,6 +63,15 @@ Ham metin ──► TF-IDF (kelime ağırlıkları) ──► Sınıflandırıc�
 
 ![Hata matrisi](reports/figures/hata_matrisi.png)
 
+### ROC eğrisi ve öğrenme eğrisi
+
+| | |
+|---|---|
+| ![ROC](reports/figures/roc_egrisi.png) | ![Öğrenme eğrisi](reports/figures/ogrenme_egrisi.png) |
+
+- **ROC AUC (test):** Linear SVM 0,992 · Logistic Regression 0,992 · Naive Bayes 0,993 · başlangıç NB 0,982. Başlangıç modelinin AUC'si bile yüksek: mesajları doğru sıralıyordu, sorun karar eşiğindeydi.
+- **Öğrenme eğrisi:** Doğrulama F1 eğitim verisi arttıkça 0,88'den 0,95'e çıkıyor ve son adımlarda düzleşiyor. Daha fazla veri çok az kazandırır. Eğitim F1'in ~1,0 olması, modelin eğitim verisini neredeyse tamamen ayırabildiğini gösteriyor.
+
 Tüm sayılar `reports/metrics.json` dosyasında.
 
 ### Yorum
@@ -116,7 +125,7 @@ sms-spam-model/
 ├── models/spam_model.joblib
 ├── reports/
 │   ├── metrics.json
-│   └── figures/           # model_karsilastirma.png, hata_matrisi.png
+│   └── figures/           # model karşılaştırma, hata matrisi, ROC, öğrenme eğrisi
 └── requirements.txt
 ```
 
